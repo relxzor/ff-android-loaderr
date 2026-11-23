@@ -1,0 +1,45 @@
+name: Compile Android Binary (.so)
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-so:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ambil Kod Sumber
+        uses: actions/checkout@v4
+
+      - name: Muat Turun Lua 5.4.6
+        run: |
+          curl -L https://www.lua.org/ftp/lua-5.4.6.tar.gz -o lua.tar.gz
+          tar -xzf lua.tar.gz
+          rm -f lua-5.4.6/src/lua.c lua-5.4.6/src/luac.c
+
+      - name: Bina libffloader.so (64-bit & 32-bit)
+        run: |
+          NDK_BIN="$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          mkdir -p out/arm64-v8a out/armeabi-v7a
+
+          # 1. Kompilasi ARM64 (arm64-v8a — Standard Telefon Moden)
+          "$NDK_BIN/aarch64-linux-android24-clang" -O2 -fPIC -DLUA_USE_POSIX -c lua-5.4.6/src/*.c
+          "$NDK_BIN/aarch64-linux-android24-clang++" -O2 -fPIC -shared -static-libstdc++ -std=c++17 \
+            -Ilua-5.4.6/src loader.cpp *.o \
+            -llog -o out/arm64-v8a/libffloader.so
+          rm -f *.o
+
+          # 2. Kompilasi ARMv7 (armeabi-v7a — 32-bit)
+          "$NDK_BIN/armv7a-linux-androideabi24-clang" -O2 -fPIC -DLUA_USE_POSIX -c lua-5.4.6/src/*.c
+          "$NDK_BIN/armv7a-linux-androideabi24-clang++" -O2 -fPIC -shared -static-libstdc++ -std=c++17 \
+            -Ilua-5.4.6/src loader.cpp *.o \
+            -llog -o out/armeabi-v7a/libffloader.so
+          rm -f *.o
+
+      - name: Bungkus Hasil Binary (.so)
+        uses: actions/upload-artifact@v4
+        with:
+          name: libffloader-android-so
+          path: out/
+          
